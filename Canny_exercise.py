@@ -13,6 +13,7 @@ def nothing(x):
 def main():
     upper = 200
     lower = 100
+    ESC_KEY = 27
 
     # Create a black image, a window
     cv.namedWindow('image')
@@ -28,8 +29,8 @@ def main():
             (img, canny_edges, sobel_edges.astype(np.uint8)))
         cv.imshow('image', display_img)
 
-        k = cv.waitKey(1) & 0xFF
-        if k == 27:
+        key = cv.waitKey(10) & 0xFF
+        if key == ESC_KEY:
             break
 
         # get current positions of four trackbars
