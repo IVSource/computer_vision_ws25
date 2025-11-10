@@ -205,4 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-computer_vision_ws25.code-workspace
+
+# Visual Studio Code Workspace Settings
+*.code-workspace
+
+# data files
+data/
