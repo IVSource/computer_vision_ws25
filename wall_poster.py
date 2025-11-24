@@ -6,15 +6,22 @@ def main():
     upper = 200
     lower = 100
     ESC_KEY = 27
-    # wall_grey = cv.imread('./data/classroom wall/20221115_113340.jpg', cv.IMREAD_GRAYSCALE)
-    wall_grey = cv.imread('./data/classroom wall/20221115_113346.jpg', cv.IMREAD_GRAYSCALE)
+    # wall_file = './data/classroom wall/20221115_113340.jpg'
+    # wall_file = './data/classroom wall/20221115_113356.jpg'
+    # wall_file = './data/classroom wall/20221115_113401.jpg'
+    # wall_file = './data/classroom wall/20221115_113412.jpg'
+    # wall_file = './data/classroom wall/20221115_113424.jpg'
+    wall_file = './data/classroom wall/20221115_113437.jpg'
+    # wall_file = './data/classroom wall/20221115_113440.jpg'
+
+    wall_grey = cv.imread(wall_file, cv.IMREAD_GRAYSCALE)
     assert wall_grey is not None, "WALL file could not be read, check with os.path.exists()"
 
-    # wall_color = cv.imread('./data/classroom wall/20221115_113340.jpg', cv.IMREAD_COLOR)
-    wall_color = cv.imread('./data/classroom wall/20221115_113346.jpg', cv.IMREAD_COLOR)
+    wall_color = cv.imread(wall_file, cv.IMREAD_COLOR)
     assert wall_color is not None, "WALL file could not be read, check with os.path.exists()"
 
     poster = cv.imread('./starry_night.jpg', cv.IMREAD_COLOR)
+    # poster = cv.imread('./messi5.jpg', cv.IMREAD_COLOR)
     assert poster is not None, "POSTER file could not be read, check with os.path.exists()"
 
     # Create a black image, a window
@@ -30,12 +37,10 @@ def main():
     print('Detected corners: ', corners)
 
     source_points = np.zeros((4, 2), dtype=np.float32)
-    print('Original corners: ', source_points)
     source_points[0] = [0, 0]
     source_points[1] = [100, 0]
     source_points[2] = [100, 100]
     source_points[3] = [0, 100]
-    print(source_points)
     target_points = np.array(corners).reshape((4, 2)).astype(np.float32)
 
     projection_matrix = cv.getPerspectiveTransform(source_points, target_points)
@@ -54,9 +59,9 @@ def main():
             print(
                 f"Marker ID: {marker_id}, Center: ({center_x:.2f}, {center_y:.2f})")
 
-    projection_matrix @= np.array([[1, 0, -100], [0, 1, -300], [0, 0, 1]])
+    projection_matrix = projection_matrix @ np.array([[1, 0, 500], [0, 1, -200], [0, 0, 1]])
 
-    projection_pane = np.zeros((*wall_grey.shape, 3), dtype=np.uint8)
+    # projection_pane = np.zeros((*wall_grey.shape, 3), dtype=np.uint8)
     cv.warpPerspective(poster, projection_matrix,
                        (wall_grey.shape[1], wall_grey.shape[0]), wall_color, borderMode=cv.BORDER_TRANSPARENT)
 
