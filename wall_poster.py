@@ -59,7 +59,7 @@ def main():
             print(
                 f"Marker ID: {marker_id}, Center: ({center_x:.2f}, {center_y:.2f})")
 
-    projection_matrix = projection_matrix @ np.array([[1, 0, 500], [0, 1, -200], [0, 0, 1]])
+    projection_matrix = projection_matrix @ np.array([[1, 0, 300], [0, 1, -200], [0, 0, 1]])
 
     # projection_pane = np.zeros((*wall_grey.shape, 3), dtype=np.uint8)
     cv.warpPerspective(poster, projection_matrix,

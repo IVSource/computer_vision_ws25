@@ -211,3 +211,6 @@ __marimo__/
 
 # data files
 data/
+
+# pre-trained model weights
+*.pt
