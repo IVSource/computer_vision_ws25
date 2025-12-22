@@ -1,19 +1,50 @@
 import numpy as np
 import cv2 as cv
+import os
+
+images_directory = './data/classroom wall/'
+image_paths = []
+
+with os.scandir(images_directory) as entries:
+    for entry in entries:
+        if entry.is_file() and entry.name.endswith('.jpg'):
+            image_paths.append(entry.path)
+
+window_name = 'ArUco Detection'
+current_image_index = 0
+
+source_points = np.zeros((4, 2), dtype=np.float32)
+source_points[0] = [0, 0]
+source_points[1] = [100, 0]
+source_points[2] = [100, 100]
+source_points[3] = [0, 100]
+
+x_offset = 512
+y_offset = 1024
+translation_matrix = np.array([[1, 0, -x_offset], [0, 1, -y_offset], [0, 0, 1]])
 
 
-def main():
-    upper = 200
-    lower = 100
-    ESC_KEY = 27
-    # wall_file = './data/classroom wall/20221115_113340.jpg'
-    # wall_file = './data/classroom wall/20221115_113356.jpg'
-    # wall_file = './data/classroom wall/20221115_113401.jpg'
-    # wall_file = './data/classroom wall/20221115_113412.jpg'
-    # wall_file = './data/classroom wall/20221115_113424.jpg'
-    wall_file = './data/classroom wall/20221115_113437.jpg'
-    # wall_file = './data/classroom wall/20221115_113440.jpg'
+def update_target_x(value: int):
+    global current_image_index
+    global x_offset
+    translation_matrix[0, 2] = value - x_offset
+    update_window(current_image_index)
 
+
+def update_target_y(value: int):
+    global current_image_index
+    global y_offset
+    translation_matrix[1, 2] = value - y_offset
+    update_window(current_image_index)
+
+
+def update_window(image: int):
+    global current_image_index
+    global translation_matrix
+
+    current_image_index = image
+    wall_file = image_paths[current_image_index]
+    print(f"Loading image: {wall_file}")
     wall_grey = cv.imread(wall_file, cv.IMREAD_GRAYSCALE)
     assert wall_grey is not None, "WALL file could not be read, check with os.path.exists()"
 
@@ -21,11 +52,7 @@ def main():
     assert wall_color is not None, "WALL file could not be read, check with os.path.exists()"
 
     poster = cv.imread('./starry_night.jpg', cv.IMREAD_COLOR)
-    # poster = cv.imread('./messi5.jpg', cv.IMREAD_COLOR)
     assert poster is not None, "POSTER file could not be read, check with os.path.exists()"
-
-    # Create a black image, a window
-    # cv.namedWindow('image', cv.WINDOW_NORMAL)
 
     # Load the ArUco dictionary and detector parameters
     aruco_dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_6X6_100)
@@ -36,15 +63,14 @@ def main():
     corners, ids, rejected = detector.detectMarkers(wall_grey)
     print('Detected corners: ', corners)
 
-    source_points = np.zeros((4, 2), dtype=np.float32)
-    source_points[0] = [0, 0]
-    source_points[1] = [100, 0]
-    source_points[2] = [100, 100]
-    source_points[3] = [0, 100]
+    if len(corners) < 1:
+        print("No markers detected.")
+        cv.imshow('ArUco Detection', wall_color)
+        return
+
     target_points = np.array(corners).reshape((4, 2)).astype(np.float32)
 
     projection_matrix = cv.getPerspectiveTransform(source_points, target_points)
-    print(projection_matrix)
 
     # Draw detected markers
     if ids is not None:
@@ -59,18 +85,38 @@ def main():
             print(
                 f"Marker ID: {marker_id}, Center: ({center_x:.2f}, {center_y:.2f})")
 
-    projection_matrix = projection_matrix @ np.array([[1, 0, 300], [0, 1, -200], [0, 0, 1]])
+    # apply translation to projection matrix
+    projection_matrix = projection_matrix @ translation_matrix
 
-    # projection_pane = np.zeros((*wall_grey.shape, 3), dtype=np.uint8)
+    # apply the projection to the poster image
     cv.warpPerspective(poster, projection_matrix,
                        (wall_grey.shape[1], wall_grey.shape[0]), wall_color, borderMode=cv.BORDER_TRANSPARENT)
 
-    cv.namedWindow('ArUco Detection', cv.WINDOW_NORMAL)
-    # cv.namedWindow('Poster Projection', cv.WINDOW_NORMAL)
     cv.imshow('ArUco Detection', wall_color)
-    # cv.imshow('Poster Projection', projection_pane)
 
-    key = cv.waitKey(0)
+
+def main():
+    global current_image_index
+    global x_offset
+    global y_offset
+    ESC_KEY = 27
+
+    print(f"Found {len(image_paths)} images in {images_directory}")
+    print(image_paths)
+
+    file_selector_name = 'Image Selector'
+    x_pos_slider_name = 'X Position'
+    y_pos_slider_name = 'Y Position'
+    cv.namedWindow(window_name, cv.WINDOW_NORMAL)
+    cv.createTrackbar(file_selector_name, window_name, 0, len(image_paths) - 1, update_window)
+    cv.createTrackbar(x_pos_slider_name, window_name, 0, 1024, update_target_x)
+    cv.createTrackbar(y_pos_slider_name, window_name, 0, 2048, update_target_y)
+    cv.setTrackbarPos(x_pos_slider_name, window_name, x_offset)
+    cv.setTrackbarPos(y_pos_slider_name, window_name, y_offset)
+    update_window(current_image_index)
+
+    while cv.waitKey(-1) != ESC_KEY:
+        pass
 
     cv.destroyAllWindows()
 
