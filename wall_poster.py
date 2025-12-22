@@ -13,20 +13,24 @@ with os.scandir(images_directory) as entries:
 window_name = 'ArUco Detection'
 current_image_index = 0
 
-source_points = np.zeros((4, 2), dtype=np.float32)
-source_points[0] = [0, 0]
-source_points[1] = [100, 0]
-source_points[2] = [100, 100]
-source_points[3] = [0, 100]
+source_points = np.array([[0, 0],
+                          [100, 0],
+                          [100, 100],
+                          [0, 100]],
+                         dtype=np.float32)
 
-x_offset = 512
+x_offset = 1024
 y_offset = 1024
-translation_matrix = np.array([[1, 0, -x_offset], [0, 1, -y_offset], [0, 0, 1]])
+scale = 1.0
+translation_matrix = np.array([[scale, 0, -x_offset],
+                               [0, scale, -y_offset],
+                               [0, 0, 1]])
 
 
 def update_target_x(value: int):
     global current_image_index
     global x_offset
+    global translation_matrix
     translation_matrix[0, 2] = value - x_offset
     update_window(current_image_index)
 
@@ -34,6 +38,7 @@ def update_target_x(value: int):
 def update_target_y(value: int):
     global current_image_index
     global y_offset
+    global translation_matrix
     translation_matrix[1, 2] = value - y_offset
     update_window(current_image_index)
 
@@ -109,7 +114,7 @@ def main():
     y_pos_slider_name = 'Y Position'
     cv.namedWindow(window_name, cv.WINDOW_NORMAL)
     cv.createTrackbar(file_selector_name, window_name, 0, len(image_paths) - 1, update_window)
-    cv.createTrackbar(x_pos_slider_name, window_name, 0, 1024, update_target_x)
+    cv.createTrackbar(x_pos_slider_name, window_name, 0, 2048, update_target_x)
     cv.createTrackbar(y_pos_slider_name, window_name, 0, 2048, update_target_y)
     cv.setTrackbarPos(x_pos_slider_name, window_name, x_offset)
     cv.setTrackbarPos(y_pos_slider_name, window_name, y_offset)
