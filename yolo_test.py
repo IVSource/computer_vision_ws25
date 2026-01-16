@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 from ultralytics import YOLO
 from ultralytics import settings
 import torch
@@ -5,18 +6,23 @@ from torchvision.ops import box_iou
 import pandas as pd
 import numpy as np
 
-# Example of IoU calculation boxes in (x1,y1,x2,y2) format
-boxes1 = torch.tensor([[10, 10, 20, 20], [0, 0, 5, 5]], dtype=torch.float)
-boxes2 = torch.tensor([[15, 15, 30, 30], [2, 2, 4, 4]], dtype=torch.float)
+print_info = True
+if print_info:
+    print("System Setup Information...")
+    print(f"Using torch version: {torch.__version__}")
+    print(f'CUDA is available: {torch.cuda.is_available()}')
+    print(f'CUDA version: {torch.version.cuda}')
+    print(f"Ultralytics version: {settings.version}")
 
-iou = box_iou(boxes1, boxes2)  # shape (2,1)
-print(iou)
 
-# print(f"Using torch version: {torch.__version__}")
-print(f'CUDA is available: {torch.cuda.is_available()}')
-# print(f'CUDA version: {torch.version.cuda}')
+class Detection:
+    def __init__(self, b_box, gt_box, distance, gt_distance, iou):
+        self.b_box = b_box
+        self.gt_box = gt_box
+        self.distance = distance
+        self.gt_distance = gt_distance
+        self.iou = iou
 
-# exit(0)
 
 # actual code
 data_directory = r'./data/KITTI_Selection'
@@ -37,8 +43,11 @@ results = model(images_directory, device='cuda:0', classes=[car_class_id])
 
 print('Displaying results...')
 
+detections = []
+
 # Show results
 for result in results:
+    matched_labels = []
     result = result.to('cpu')  # move result to CPU for further processing
     frame_file_name = str(result.path).split('/')[-1]
     print('From file: ', frame_file_name)  # access image filename
@@ -46,6 +55,8 @@ for result in results:
     print('Detection boxes: ', result.boxes.xyxy.shape[0])  # Boxes object for bbox outputs
 
     labels_file_name = annotations_directory + '/' + frame_file_name.replace('.png', '.txt')
+
+    # result.show()  # display image in a window
 
     try:
         labels_df = pd.read_csv(labels_file_name, sep=' ', header=None)
@@ -65,20 +76,49 @@ for result in results:
 
     for box in result.boxes.xyxy:
         # print('Predicted box: ', box)
-        iou_value = box_iou(labels_tensor, box.unsqueeze(0))
-        iou_value = iou_value.squeeze()
+        iou_values = box_iou(labels_tensor, box.unsqueeze(0)).squeeze()
+        max_iou_value = torch.max(iou_values).item()
+        max_iou_idx = torch.argmax(iou_values).item()
+        # print('Max IoU: ', max_iou_value, ' at index ', max_iou_idx)
+
+        if max_iou_value < 0.7 or labels_tensor.shape[0] == 0 or max_iou_idx in matched_labels:
+            print('No matching ground truth box found, skipping distance calculation.')
+            continue
+
+        matched_labels.append(max_iou_idx)
         foot_point_x = (box[0] + box[2]) / 2
         foot_point_y = box[3]
-        print(f'Foot point: ({foot_point_x:.1f}, {foot_point_y:.1f})')
+        # print(f'Foot point: ({foot_point_x:.1f}, {foot_point_y:.1f})')
         foot_point = torch.tensor([[foot_point_x, foot_point_y, 1.0]])
-        world_point = torch.matmul(torch.inverse(camera_matrix_frame), foot_point.T)
-        print(f'World coordinates: X={world_point[0][0]:.2f}, Y={world_point[1][0]:.2f}, Z={world_point[2][0]:.2f}')
+        world_point = torch.matmul(torch.inverse(camera_matrix_frame), foot_point.T).squeeze()
+        # print(f'World coordinates: X={world_point[0][0]:.2f}, Y={world_point[1][0]:.2f}, Z={world_point[2][0]:.2f}')
 
-        scale = 1.65 / world_point[1][0]
+        scale = 1.65 / world_point[1]
         world_point_scaled = world_point * scale
-        print(
-            f'Estimated ground distance: {(np.sqrt(world_point_scaled[1][0]**2 + world_point_scaled[2][0]**2)):2.1f} meters')
+        # print(
+        # f'Estimated ground distance: {(np.sqrt(world_point_scaled[1][0]**2 + world_point_scaled[2][0]**2))} meters')
 
-        # print(f'IoU with detection box: {iou_value}')
+        detection = Detection(
+            b_box=box.numpy(),
+            gt_box=labels_tensor[torch.argmax(iou_values)].numpy(),
+            distance=np.sqrt(world_point_scaled[1]**2 + world_point_scaled[2]**2),
+            # distance=np.linalg.norm(world_point_scaled[:, 0].numpy()),
+            gt_distance=labels_df.iloc[torch.argmax(iou_values).item(), -1],
+            iou=max_iou_value
+        )
+        detections.append(detection)
 
-    # result.show()  # display image in a window
+        # difference = np.linalg.norm(world_point_scaled.numpy()) - detection.distance
+        # print('Line of sight vs Ground distance:', difference / detection.gt_distance * 100, '%')
+
+print(f'Total detections processed: {len(detections)}')
+
+all_estimated_distances = [det.distance for det in detections]
+all_gt_distances = [det.gt_distance for det in detections]
+
+
+plt.scatter(all_estimated_distances, all_gt_distances, c='blue')
+plt.plot([0, max(all_gt_distances)], [0, max(all_gt_distances)], 'r--')
+plot_file_name = data_directory + r'/distance_estimation_scatter.png'
+plt.savefig(plot_file_name)
+plt.show()
