@@ -5,8 +5,9 @@ import torch
 from torchvision.ops import box_iou
 import pandas as pd
 import numpy as np
+from PIL import Image, ImageDraw
 
-print_info = True
+print_info = False
 if print_info:
     print("System Setup Information...")
     print(f"Using torch version: {torch.__version__}")
@@ -36,7 +37,6 @@ model = YOLO("yolov8n.pt")
 # Create a reverse dictionary for class names
 name_to_id = {v: k for k, v in model.model.names.items()}
 car_class_id = name_to_id['car']
-print(f'Class ID for "car": {car_class_id}')
 
 # Perform inference on an image
 results = model(images_directory, device='cuda:0', classes=[car_class_id])
@@ -52,7 +52,7 @@ for result in results:
     frame_file_name = str(result.path).split('/')[-1]
     print('From file: ', frame_file_name)  # access image filename
     # print('Confidences: ', result.boxes.conf)  # numpy array of confidences
-    print('Detection boxes: ', result.boxes.xyxy.shape[0])  # Boxes object for bbox outputs
+    # print('Detection boxes: ', result.boxes.xyxy.shape[0])  # Boxes object for bbox outputs
 
     labels_file_name = annotations_directory + '/' + frame_file_name.replace('.png', '.txt')
 
@@ -69,10 +69,19 @@ for result in results:
     camera_matrix_frame = torch.tensor(camera_matrix_frame)
     # print('Camera matrix ', camera_matrix_frame)
 
-    # print(labels_df.head(2))
     labels_tensor = torch.tensor(labels_df.iloc[:, 1:5].values)
-    print('Ground truth boxes: ', labels_tensor.shape[0])
-    print(labels_df.iloc[:, -1].values)
+    # Visualize the labels
+    image_path = images_directory + '/' + frame_file_name
+    image = Image.open(image_path)
+    draw = ImageDraw.Draw(image)
+
+    for label_tensor in labels_tensor:
+        draw.rectangle(label_tensor.tolist(), outline='white', width=2)
+        # draw.text((detection.gt_box[0], detection.gt_box[1]), f'GT: {detection.gt_distance:.2f}m',
+        #       fill='green', anchor='lb')
+
+    vis_file_name = data_directory + '/' + frame_file_name.split('.')[0] + '__labels.png'
+    image.save(vis_file_name)
 
     for box in result.boxes.xyxy:
         # print('Predicted box: ', box)
@@ -95,21 +104,42 @@ for result in results:
 
         scale = 1.65 / world_point[1]
         world_point_scaled = world_point * scale
-        # print(
-        # f'Estimated ground distance: {(np.sqrt(world_point_scaled[1][0]**2 + world_point_scaled[2][0]**2))} meters')
 
         detection = Detection(
             b_box=box.numpy(),
             gt_box=labels_tensor[torch.argmax(iou_values)].numpy(),
-            distance=np.sqrt(world_point_scaled[1]**2 + world_point_scaled[2]**2),
-            # distance=np.linalg.norm(world_point_scaled[:, 0].numpy()),
+            # X and Z coordinates only as we are in the XY-plane
+            distance=np.linalg.norm(world_point_scaled[::2].numpy()),
             gt_distance=labels_df.iloc[torch.argmax(iou_values).item(), -1],
             iou=max_iou_value
         )
         detections.append(detection)
 
-        # difference = np.linalg.norm(world_point_scaled.numpy()) - detection.distance
-        # print('Line of sight vs Ground distance:', difference / detection.gt_distance * 100, '%')
+        distance_error = (detection.distance - detection.gt_distance) / detection.gt_distance
+
+        # Visualize the detection
+        image_path = images_directory + '/' + frame_file_name
+        image = Image.open(image_path)
+        draw = ImageDraw.Draw(image)
+
+        # Draw predicted box in red
+        draw.rectangle(detection.b_box.tolist(), outline='red', width=2)
+        draw.text((detection.b_box[2], detection.b_box[3]),
+                  f'Est: {detection.distance:.2f}m', fill='red', anchor='rb')
+        # Draw ground truth box in green
+        draw.rectangle(detection.gt_box.tolist(), outline='green', width=2)
+        draw.text((detection.gt_box[0], detection.gt_box[1]), f'GT: {detection.gt_distance:.2f}m',
+                  fill='green', anchor='lb')
+
+        vis_file_name = data_directory + '/' + frame_file_name.split('.')[0] + '_' + str(max_iou_idx)
+
+        if (np.abs(distance_error) > 0.2):
+            vis_file_name += '_large_error.png'
+            image.save(vis_file_name)
+        else:
+            vis_file_name += '.png'
+            image.save(vis_file_name)
+
 
 print(f'Total detections processed: {len(detections)}')
 
@@ -118,7 +148,11 @@ all_gt_distances = [det.gt_distance for det in detections]
 
 
 plt.scatter(all_estimated_distances, all_gt_distances, c='blue')
-plt.plot([0, max(all_gt_distances)], [0, max(all_gt_distances)], 'r--')
+plt.plot([0, max(all_gt_distances)], [0, max(all_gt_distances)], 'r')
+plt.plot([0, max(all_gt_distances)], [0, max(all_gt_distances)*0.8], 'r--')
+plt.plot([0, max(all_gt_distances)], [0, max(all_gt_distances)*1.2], 'r--')
 plot_file_name = data_directory + r'/distance_estimation_scatter.png'
 plt.savefig(plot_file_name)
 plt.show()
+
+print('Evaluation completed.')
