@@ -63,15 +63,14 @@ for result in results:
     try:
         labels_df = pd.read_csv(labels_file_name, sep=' ', header=None)
     except pd.errors.EmptyDataError:
-        # labels_df = pd.DataFrame()
         continue
 
     calbration_file_name = cam_calib_directory + '/' + frame_file_name.replace('.png', '.txt')
     camera_matrix_frame = np.loadtxt(calbration_file_name, delimiter=' ', dtype=np.float32)
     camera_matrix_frame = torch.tensor(camera_matrix_frame)
-    # print('Camera matrix ', camera_matrix_frame)
 
     labels_tensor = torch.tensor(labels_df.iloc[:, 1:5].values)
+
     # Visualize the labels
     image_path = images_directory + '/' + frame_file_name
     image_with_labels = Image.open(image_path)
@@ -81,18 +80,14 @@ for result in results:
 
     for label_tensor in labels_tensor:
         draw_labels.rectangle(label_tensor.tolist(), outline='white', width=2)
-        # draw.text((detection.gt_box[0], detection.gt_box[1]), f'GT: {detection.gt_distance:.2f}m',
-        #       fill='green', anchor='lb')
 
     labels_file_name = data_directory + '/' + frame_file_name.split('.')[0] + '__labels.png'
     image_with_labels.save(labels_file_name)
 
     for box in result.boxes.xyxy:
-        # print('Predicted box: ', box)
         iou_values = box_iou(labels_tensor, box.unsqueeze(0)).squeeze()
         max_iou_value = torch.max(iou_values).item()
         max_iou_idx = torch.argmax(iou_values).item()
-        # print('Max IoU: ', max_iou_value, ' at index ', max_iou_idx)
 
         draw_detections.rectangle(box.tolist(), outline='yellow', width=2)
         draw_detections.text((box[2], box[3]), f'IoU: {max_iou_value:.2f}', fill='red', anchor='rb')
@@ -104,10 +99,8 @@ for result in results:
         matched_labels.append(max_iou_idx)
         foot_point_x = (box[0] + box[2]) / 2
         foot_point_y = box[3]
-        # print(f'Foot point: ({foot_point_x:.1f}, {foot_point_y:.1f})')
         foot_point = torch.tensor([[foot_point_x, foot_point_y, 1.0]])
         world_point = torch.matmul(torch.inverse(camera_matrix_frame), foot_point.T).squeeze()
-        # print(f'World coordinates: X={world_point[0][0]:.2f}, Y={world_point[1][0]:.2f}, Z={world_point[2][0]:.2f}')
 
         scale = 1.65 / world_point[1]
         world_point_scaled = world_point * scale
