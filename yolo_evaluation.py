@@ -56,7 +56,9 @@ for result in results:
 
     labels_file_name = annotations_directory + '/' + frame_file_name.replace('.png', '.txt')
 
-    # result.show()  # display image in a window
+    show_results = False
+    if show_results:
+        result.show()  # display image in a window
 
     try:
         labels_df = pd.read_csv(labels_file_name, sep=' ', header=None)
@@ -72,16 +74,18 @@ for result in results:
     labels_tensor = torch.tensor(labels_df.iloc[:, 1:5].values)
     # Visualize the labels
     image_path = images_directory + '/' + frame_file_name
-    image = Image.open(image_path)
-    draw = ImageDraw.Draw(image)
+    image_with_labels = Image.open(image_path)
+    image_with_detections = image_with_labels.copy()
+    draw_labels = ImageDraw.Draw(image_with_labels)
+    draw_detections = ImageDraw.Draw(image_with_detections)
 
     for label_tensor in labels_tensor:
-        draw.rectangle(label_tensor.tolist(), outline='white', width=2)
+        draw_labels.rectangle(label_tensor.tolist(), outline='white', width=2)
         # draw.text((detection.gt_box[0], detection.gt_box[1]), f'GT: {detection.gt_distance:.2f}m',
         #       fill='green', anchor='lb')
 
-    vis_file_name = data_directory + '/' + frame_file_name.split('.')[0] + '__labels.png'
-    image.save(vis_file_name)
+    labels_file_name = data_directory + '/' + frame_file_name.split('.')[0] + '__labels.png'
+    image_with_labels.save(labels_file_name)
 
     for box in result.boxes.xyxy:
         # print('Predicted box: ', box)
@@ -90,7 +94,10 @@ for result in results:
         max_iou_idx = torch.argmax(iou_values).item()
         # print('Max IoU: ', max_iou_value, ' at index ', max_iou_idx)
 
-        if max_iou_value < 0.7 or labels_tensor.shape[0] == 0 or max_iou_idx in matched_labels:
+        draw_detections.rectangle(box.tolist(), outline='yellow', width=2)
+        draw_detections.text((box[2], box[3]), f'IoU: {max_iou_value:.2f}', fill='red', anchor='rb')
+
+        if max_iou_value < 0.65 or labels_tensor.shape[0] == 0 or max_iou_idx in matched_labels:
             print('No matching ground truth box found, skipping distance calculation.')
             continue
 
@@ -140,6 +147,9 @@ for result in results:
             vis_file_name += '.png'
             image.save(vis_file_name)
 
+    detections_file_name = data_directory + '/' + frame_file_name.split('.')[0] + '__detections.png'
+    image_with_detections.save(detections_file_name)
+
 
 print(f'Total detections processed: {len(detections)}')
 
@@ -151,8 +161,11 @@ plt.scatter(all_estimated_distances, all_gt_distances, c='blue')
 plt.plot([0, max(all_gt_distances)], [0, max(all_gt_distances)], 'r')
 plt.plot([0, max(all_gt_distances)], [0, max(all_gt_distances)*0.8], 'r--')
 plt.plot([0, max(all_gt_distances)], [0, max(all_gt_distances)*1.2], 'r--')
+plt.xlabel('Estimated Distance (m)')
+plt.ylabel('Ground Truth Distance (m)')
+plt.title('Distance Estimation Evaluation')
 plot_file_name = data_directory + r'/distance_estimation_scatter.png'
 plt.savefig(plot_file_name)
-plt.show()
+# plt.show()
 
 print('Evaluation completed.')
