@@ -50,7 +50,7 @@ for result in results:
     matched_labels = []
     result = result.to('cpu')  # move result to CPU for further processing
     frame_file_name = str(result.path).split('/')[-1]
-    print('From file: ', frame_file_name)  # access image filename
+    print('Processing frame: ', frame_file_name)  # access image filename
     # print('Confidences: ', result.boxes.conf)  # numpy array of confidences
     # print('Detection boxes: ', result.boxes.xyxy.shape[0])  # Boxes object for bbox outputs
 
@@ -89,12 +89,13 @@ for result in results:
         max_iou_value = torch.max(iou_values).item()
         max_iou_idx = torch.argmax(iou_values).item()
 
-        draw_detections.rectangle(box.tolist(), outline='yellow', width=2)
-        draw_detections.text((box[2], box[3]), f'IoU: {max_iou_value:.2f}', fill='red', anchor='rb')
-
         if max_iou_value < 0.65 or labels_tensor.shape[0] == 0 or max_iou_idx in matched_labels:
-            print('No matching ground truth box found, skipping distance calculation.')
+            draw_detections.rectangle(box.tolist(), outline='yellow', width=2)
+            draw_detections.text((box[2], box[3]), f'IoU: {max_iou_value:.2f}', fill='red', anchor='rb')
             continue
+
+        draw_detections.rectangle(box.tolist(), outline='green', width=2)
+        draw_detections.text((box[2], box[3]), f'IoU: {max_iou_value:.2f}', fill='red', anchor='rb')
 
         matched_labels.append(max_iou_idx)
         foot_point_x = (box[0] + box[2]) / 2
@@ -140,6 +141,10 @@ for result in results:
             vis_file_name += '.png'
             image.save(vis_file_name)
 
+    frame_recall = len(matched_labels) / (labels_tensor.shape[0])
+    frame_precision = len(matched_labels) / (result.boxes.xyxy.shape[0])
+    draw_detections.text((10, 10), f'Precision: {frame_precision:.2f}', fill='red', anchor='lt')
+    draw_detections.text((10, 30), f'Recall: {frame_recall:.2f}', fill='red', anchor='lt')
     detections_file_name = data_directory + '/' + frame_file_name.split('.')[0] + '__detections.png'
     image_with_detections.save(detections_file_name)
 
