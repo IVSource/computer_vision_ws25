@@ -89,7 +89,7 @@ for result in results:
         max_iou_value = torch.max(iou_values).item()
         max_iou_idx = torch.argmax(iou_values).item()
 
-        if max_iou_value < 0.65 or labels_tensor.shape[0] == 0 or max_iou_idx in matched_labels:
+        if max_iou_value < 0.69 or labels_tensor.shape[0] == 0 or max_iou_idx in matched_labels:
             draw_detections.rectangle(box.tolist(), outline='yellow', width=2)
             draw_detections.text((box[2], box[3]), f'IoU: {max_iou_value:.2f}', fill='red', anchor='rb')
             continue
